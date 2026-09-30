@@ -1,256 +1,143 @@
-from flask import Flask, render_template_string, request, jsonify
+import tkinter as tk
+from tkinter import font
 
-app = Flask(__name__)
+class AttendanceApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Student Attendance System")
+        self.root.geometry("520x460")
+        self.root.configure(bg="#f4f6f9")
 
-# Simple in-memory student data
-students = [
-    {"id": 1, "name": "Alice Smith", "status": None},
-    {"id": 2, "name": "Bob Jones", "status": None},
-    {"id": 3, "name": "Charlie Brown", "status": None},
-    {"id": 4, "name": "Diana Prince", "status": None},
-    {"id": 5, "name": "Evan Wright", "status": None}
-]
+        self.students = [
+            {"id": 1, "name": "Alice Smith", "status": None},
+            {"id": 2, "name": "Bob Jones", "status": None},
+            {"id": 3, "name": "Charlie Brown", "status": None},
+            {"id": 4, "name": "Diana Prince", "status": None},
+            {"id": 5, "name": "Evan Wright", "status": None}
+        ]
 
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Student Attendance System</title>
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
+        self.setup_ui()
 
-    body {
-      background-color: #f4f6f9;
-      color: #333;
-      display: flex;
-      justify-content: center;
-      padding: 40px 20px;
-    }
+    def setup_ui(self):
+        # Title
+        title_font = font.Font(family="Helvetica", size=18, weight="bold")
+        title_label = tk.Label(
+            self.root,
+            text="Student Attendance System",
+            font=title_font,
+            bg="#f4f6f9",
+            fg="#1e293b"
+        )
+        title_label.pack(pady=(20, 15))
 
-    .container {
-      width: 100%;
-      max-width: 600px;
-      background: #ffffff;
-      padding: 28px;
-      border-radius: 12px;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-    }
+        # Summary Frame
+        summary_frame = tk.Frame(self.root, bg="#f4f6f9")
+        summary_frame.pack(fill="x", padx=30, pady=(0, 20))
 
-    h1 {
-      font-size: 24px;
-      margin-bottom: 20px;
-      text-align: center;
-      color: #1e293b;
-    }
+        # Present Card
+        present_card = tk.Frame(summary_frame, bg="#f0fdf4", highlightbackground="#bbf7d0", highlightthickness=1, bd=0)
+        present_card.pack(side="left", expand=True, fill="both", padx=(0, 6), ipady=10)
 
-    .summary-cards {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 24px;
-    }
+        card_title_font = font.Font(family="Helvetica", size=10, weight="bold")
+        count_font = font.Font(family="Helvetica", size=22, weight="bold")
 
-    .card {
-      flex: 1;
-      padding: 16px;
-      border-radius: 8px;
-      text-align: center;
-      background-color: #f8fafc;
-      border: 1px solid #e2e8f0;
-    }
+        tk.Label(present_card, text="PRESENT", font=card_title_font, bg="#f0fdf4", fg="#166534").pack()
+        self.present_count_var = tk.StringVar(value="0")
+        tk.Label(present_card, textvariable=self.present_count_var, font=count_font, bg="#f0fdf4", fg="#166534").pack()
 
-    .card.present-card {
-      background-color: #f0fdf4;
-      border-color: #bbf7d0;
-      color: #166534;
-    }
+        # Absent Card
+        absent_card = tk.Frame(summary_frame, bg="#fef2f2", highlightbackground="#fecaca", highlightthickness=1, bd=0)
+        absent_card.pack(side="right", expand=True, fill="both", padx=(6, 0), ipady=10)
 
-    .card.absent-card {
-      background-color: #fef2f2;
-      border-color: #fecaca;
-      color: #991b1b;
-    }
+        tk.Label(absent_card, text="ABSENT", font=card_title_font, bg="#fef2f2", fg="#991b1b").pack()
+        self.absent_count_var = tk.StringVar(value="0")
+        tk.Label(absent_card, textvariable=self.absent_count_var, font=count_font, bg="#fef2f2", fg="#991b1b").pack()
 
-    .card .count {
-      font-size: 28px;
-      font-weight: bold;
-      margin-top: 4px;
-    }
+        # Student List Container
+        list_frame = tk.Frame(self.root, bg="#ffffff", highlightbackground="#e2e8f0", highlightthickness=1)
+        list_frame.pack(fill="both", expand=True, padx=30, pady=(0, 20))
 
-    .card .label {
-      font-size: 14px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
+        name_font = font.Font(family="Helvetica", size=11, weight="bold")
+        btn_font = font.Font(family="Helvetica", size=10, weight="bold")
 
-    .student-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
+        self.student_rows = []
 
-    .student-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 18px;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      background-color: #ffffff;
-      transition: background-color 0.2s;
-    }
+        for student in self.students:
+            row = tk.Frame(list_frame, bg="#ffffff", highlightbackground="#e2e8f0", highlightthickness=1)
+            row.pack(fill="x", padx=12, pady=6)
 
-    .student-item:hover {
-      background-color: #f8fafc;
-    }
+            lbl = tk.Label(row, text=student["name"], font=name_font, bg="#ffffff", fg="#334155")
+            lbl.pack(side="left", padx=12, pady=10)
 
-    .student-name {
-      font-weight: 600;
-      font-size: 16px;
-      color: #334155;
-    }
+            btn_frame = tk.Frame(row, bg="#ffffff")
+            btn_frame.pack(side="right", padx=12)
 
-    .action-buttons {
-      display: flex;
-      gap: 8px;
-    }
+            p_btn = tk.Button(
+                btn_frame,
+                text="Present",
+                font=btn_font,
+                bg="#ffffff",
+                fg="#16a34a",
+                activebackground="#16a34a",
+                activeforeground="#ffffff",
+                bd=1,
+                relief="solid",
+                width=8,
+                cursor="hand2",
+                command=lambda s_id=student["id"]: self.mark_attendance(s_id, "present")
+            )
+            p_btn.pack(side="left", padx=4)
 
-    .btn {
-      padding: 8px 16px;
-      font-size: 14px;
-      font-weight: 600;
-      border-radius: 6px;
-      border: 1px solid transparent;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
+            a_btn = tk.Button(
+                btn_frame,
+                text="Absent",
+                font=btn_font,
+                bg="#ffffff",
+                fg="#dc2626",
+                activebackground="#dc2626",
+                activeforeground="#ffffff",
+                bd=1,
+                relief="solid",
+                width=8,
+                cursor="hand2",
+                command=lambda s_id=student["id"]: self.mark_attendance(s_id, "absent")
+            )
+            a_btn.pack(side="left", padx=4)
 
-    .btn-present {
-      background-color: #ffffff;
-      color: #16a34a;
-      border-color: #16a34a;
-    }
+            self.student_rows.append({
+                "id": student["id"],
+                "present_btn": p_btn,
+                "absent_btn": a_btn
+            })
 
-    .btn-present:hover {
-      background-color: #f0fdf4;
-    }
+    def mark_attendance(self, student_id, status):
+        for student in self.students:
+            if student["id"] == student_id:
+                student["status"] = status
+                break
 
-    .btn-present.active {
-      background-color: #16a34a;
-      color: #ffffff;
-    }
+        self.update_ui()
 
-    .btn-absent {
-      background-color: #ffffff;
-      color: #dc2626;
-      border-color: #dc2626;
-    }
+    def update_ui(self):
+        present_count = sum(1 for s in self.students if s["status"] == "present")
+        absent_count = sum(1 for s in self.students if s["status"] == "absent")
 
-    .btn-absent:hover {
-      background-color: #fef2f2;
-    }
+        self.present_count_var.set(str(present_count))
+        self.absent_count_var.set(str(absent_count))
 
-    .btn-absent.active {
-      background-color: #dc2626;
-      color: #ffffff;
-    }
-  </style>
-</head>
-<body>
-
-  <div class="container">
-    <h1>Student Attendance System</h1>
-
-    <div class="summary-cards">
-      <div class="card present-card">
-        <div class="label">Present</div>
-        <div class="count" id="present-count">0</div>
-      </div>
-      <div class="card absent-card">
-        <div class="label">Absent</div>
-        <div class="count" id="absent-count">0</div>
-      </div>
-    </div>
-
-    <div class="student-list" id="student-list">
-      <!-- Student items rendered dynamically -->
-    </div>
-  </div>
-
-  <script>
-    let students = {{ students_json|safe }};
-
-    function updateSummary() {
-      const presentCount = students.filter(s => s.status === 'present').length;
-      const absentCount = students.filter(s => s.status === 'absent').length;
-
-      document.getElementById('present-count').textContent = presentCount;
-      document.getElementById('absent-count').textContent = absentCount;
-    }
-
-    function markAttendance(studentId, status) {
-      const student = students.find(s => s.id === studentId);
-      if (student) {
-        student.status = status;
-        renderStudents();
-        updateSummary();
-      }
-    }
-
-    function renderStudents() {
-      const container = document.getElementById('student-list');
-      container.innerHTML = '';
-
-      students.forEach(student => {
-        const item = document.createElement('div');
-        item.className = 'student-item';
-
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'student-name';
-        nameSpan.textContent = student.name;
-
-        const buttonGroup = document.createElement('div');
-        buttonGroup.className = 'action-buttons';
-
-        const presentBtn = document.createElement('button');
-        presentBtn.className = `btn btn-present ${student.status === 'present' ? 'active' : ''}`;
-        presentBtn.textContent = 'Present';
-        presentBtn.onclick = () => markAttendance(student.id, 'present');
-
-        const absentBtn = document.createElement('button');
-        absentBtn.className = `btn btn-absent ${student.status === 'absent' ? 'active' : ''}`;
-        absentBtn.textContent = 'Absent';
-        absentBtn.onclick = () => markAttendance(student.id, 'absent');
-
-        buttonGroup.appendChild(presentBtn);
-        buttonGroup.appendChild(absentBtn);
-
-        item.appendChild(nameSpan);
-        item.appendChild(buttonGroup);
-
-        container.appendChild(item);
-      });
-    }
-
-    // Initial render
-    renderStudents();
-    updateSummary();
-  </script>
-</body>
-</html>
-"""
-
-@app.route("/")
-def home():
-    import json
-    return render_template_string(HTML_TEMPLATE, students_json=json.dumps(students))
+        for row in self.student_rows:
+            student = next(s for s in self.students if s["id"] == row["id"])
+            if student["status"] == "present":
+                row["present_btn"].configure(bg="#16a34a", fg="#ffffff")
+                row["absent_btn"].configure(bg="#ffffff", fg="#dc2626")
+            elif student["status"] == "absent":
+                row["present_btn"].configure(bg="#ffffff", fg="#16a34a")
+                row["absent_btn"].configure(bg="#dc2626", fg="#ffffff")
+            else:
+                row["present_btn"].configure(bg="#ffffff", fg="#16a34a")
+                row["absent_btn"].configure(bg="#ffffff", fg="#dc2626")
 
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    root = tk.Tk()
+    app = AttendanceApp(root)
+    root.mainloop()
